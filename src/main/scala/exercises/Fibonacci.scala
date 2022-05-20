@@ -14,6 +14,8 @@ object Fibonacci {
       }
     }
     loop(0,1,0)
+    //loop is called n+1 times, the recursion ends
+    //with n1 = F_n, n2 = F_(n+1)
   }
 
   def fibAlternative(n: Int):Int = {
