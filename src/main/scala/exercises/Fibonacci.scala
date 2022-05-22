@@ -2,6 +2,7 @@ package exercises
 
 import scala.annotation.tailrec
 
+//Exercise 2.1
 object Fibonacci {
 
   def fib(n: Int):Int = {
