@@ -9,16 +9,25 @@ import scala.annotation.tailrec
 
 //+A: covariant, LinkedList[B] is a subtype of LinkedList[A] if
 //B is a subtype of A
-sealed trait LinkedList[+A]
+sealed trait LinkedList[+A] {
+   def buildStringRepresentation(str: String):String
+}
 
 //Nothing is a subtype of all types => List[Nothing] is a subtype of all List[A]
 //This represents an empty list
-case object Nil extends LinkedList[Nothing]
+case object Nil extends LinkedList[Nothing] {
+  override def buildStringRepresentation(str: String): String = {
+    ""
+  }
+}
 
 case class Cons[+A](head: A, tail: LinkedList[A]) extends LinkedList[A] {
   override def toString: String = {
-    if (tail != Nil) head.toString +", "+ tail.toString
-    else head.toString
+    buildStringRepresentation("LinkedList(")+")"
+  }
+  def buildStringRepresentation(str: String): String = {
+     if (tail != Nil) tail.buildStringRepresentation(str+head.toString+", ")
+     else str+head.toString
   }
 }
 
