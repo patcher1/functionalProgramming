@@ -1,6 +1,6 @@
 package exercises
 
-import exercises.LinkedList.{append, drop, dropWhile, dropWhileCurried, init, productWithFold, setHead, sum, sumWithFold}
+import exercises.LinkedList.{addLists, append, appendWithFold, applyUsingFoldRight, concat, drop, dropWhile, dropWhileCurried, foldLeft, foldRight, foldRightUsingFoldLeft, init, mapUsingFold, productWithFold, reverse, setHead, sum, sumWithFold, zipWith}
 
 import scala.annotation.tailrec
 
@@ -60,20 +60,6 @@ object LinkedList {
     case Nil => 1.0
     case Cons(0.0, _) => 0.0
     case Cons(x, xs) => x * product(xs)
-  }
-
-  //f is a binary operator getting applied from right to left
-  //The evaluation goes as follows:
-  //1) f(h1,foldRight(list,special)(f))
-  //2) f(h1,f(h2,foldRight(list,special)(f)))
-  //3) f(h1,f(h2,f(h3,foldRight(list,special)(f)))) ...
-  //So the evaluation happens from "inner" function to "outer" i.e. from
-  //right to left starting with f(h_n,initial) if h_n is the last element of the list.
-  def foldRight[A,B](list: LinkedList[A],initial: B)(f:(A,B) => B):B={
-    list match {
-      case Nil => initial
-      case Cons(h,t) => f(h,foldRight(t, initial)(f))
-    }
   }
 
   //A* is an ArraySeq with an underlying array
@@ -140,6 +126,134 @@ object LinkedList {
     //calculations
     foldRight(l,0)((_,count) => count + 1)
   }
+
+  def applyUsingFoldRight[A](list: A*):LinkedList[A]={
+    list.foldRight(Nil: LinkedList[A])(Cons(_,_))
+  }
+
+
+  //f is a binary operator getting applied from right to left
+  //The evaluation goes as follows:
+  //1) f(h1,foldRight(list,special)(f))
+  //2) f(h1,f(h2,foldRight(list,special)(f)))
+  //3) f(h1,f(h2,f(h3,foldRight(list,special)(f)))) ...
+  //So the evaluation happens from "inner" function to "outer" i.e. from
+  //right to left starting with f(h_n,initial) if h_n is the last element of the list.
+  def foldRight[A,B](list: LinkedList[A],initial: B)(f:(A,B) => B):B={
+    list match {
+      case Nil => initial
+      case Cons(h,t) => f(h,foldRight(t, initial)(f))
+    }
+  }
+
+//  Exercise 3.10
+//  Tail-recursive, no danger of stackoverflow
+  @tailrec
+  def foldLeft[A,B](as: LinkedList[A], z: B)(f: (B, A) => B): B = {
+    as match {
+      //At the end of the list, this z will be z = f(f(...f(z,h_1),h_2),...,h_n)
+      //i.e. f will be applied from left to right with an initial left operand = z
+      case Nil => z
+      //Pass f(z,h) as the "new" z then for example after one recursion:
+      //f(f(z,h1),h2) = z
+      case Cons(h,t) => foldLeft(t,f(z,h))(f)
+    }
+  }
+
+  //exercise 3.12
+  def reverse[A](as: LinkedList[A]):LinkedList[A]={
+    foldLeft(as,Nil:LinkedList[A])((t,h) => Cons(h,t))
+  }
+
+  //exercise 3.13, This avoids stackoverflows since foldLeft is tail recursive
+  def foldRightUsingFoldLeft[A,B](as: LinkedList[A], z: B)(f: (A,B) => B): B = {
+    foldLeft(reverse(as),z)((l,r) => f(r,l))
+  }
+
+  //exercise 3.14
+  def appendWithFold[A](l: LinkedList[A], r: LinkedList[A]):LinkedList[A]={
+    foldRight(l,r)((h,t) => Cons(h,t))
+  }
+
+  //exercise 3.15, "official" solution uses foldRight but foldLeft also works well
+  //and is stack-safe
+  def concat[A](listOfLists: LinkedList[LinkedList[A]]): LinkedList[A]={
+    foldLeft(listOfLists,Nil:LinkedList[A])((t,h)=> append(t,h))
+  }
+
+//  exercise 3.18
+  def mapUsingFold[A,B](as: LinkedList[A])(f: A => B): LinkedList[B] = {
+    foldRightUsingFoldLeft(as,Nil:LinkedList[B])((h,t) => Cons(f(h),t))
+  }
+
+  //More usual map implementation with local mutable ListBuffer
+  def map[A,B](l: LinkedList[A])(f: A => B): LinkedList[B] = {
+    val buf = new collection.mutable.ListBuffer[B]
+    @tailrec
+    def go(l: LinkedList[A]): Unit = l match {
+      case Nil => () //the only value of type unit
+      case Cons(h,t) => buf += f(h)
+                        go(t)
+    }
+    go(l)
+
+    //converting to LinkedList
+    LinkedList(buf.toList: _*)
+  }
+
+  //exercise 3.19
+  def filter[A](l: LinkedList[A])(predicate: A => Boolean): LinkedList[A]={
+    val buf = new collection.mutable.ListBuffer[A]
+    @tailrec
+    def go(l: LinkedList[A]):Unit = l match {
+      case Nil => ()
+      case Cons(h,t) => if(predicate(h)) buf+= h; go(t)
+    }
+    go(l)
+    LinkedList(buf.toList: _*)
+  }
+
+  //exercise 3.20
+  def flatMap[A,B](as: LinkedList[A])(f: A => LinkedList[B]):LinkedList[B] = {
+    concat(map(as)(f))
+  }
+
+  //exercise 3.21
+  def filterWithFlatMap[A](l: LinkedList[A])(predicate: A => Boolean): LinkedList[A]={
+    flatMap(l)(e => if(predicate(e)) Cons(e,Nil) else Nil)
+  }
+
+  //exercise 3.22 (stack-safe)
+  def addLists (l1: LinkedList[Int], l2: LinkedList[Int]):LinkedList[Int] = {
+    val buf = new collection.mutable.ListBuffer[Int]
+    @tailrec
+    def go(l1: LinkedList[Int],l2: LinkedList[Int]): Unit = (l1,l2) match {
+      case (Nil,_) => () //the only value of type unit
+      case (_,Nil) => ()
+      case (Cons(h1,t1),Cons(h2,t2)) => buf += h1 + h2
+                                        go(t1,t2)
+    }
+    go(l1,l2)
+
+    //converting to LinkedList
+    LinkedList(buf.toList: _*)
+  }
+
+  //exercise 3.23 (stack-safe)
+  def zipWith[A,B,C](l1: LinkedList[A],l2: LinkedList[B])(op: (A,B) => C): LinkedList[C] = {
+    val buf = new collection.mutable.ListBuffer[C]
+    @tailrec
+    def go[D,E](l1: LinkedList[D],l2: LinkedList[E])(op: (D,E) => C): Unit = (l1,l2) match {
+      case (Nil,_) => ()
+      case (_,Nil) => ()
+      case (Cons(h1,t1),Cons(h2,t2)) => buf += op(h1,h2)
+                                        go(t1,t2)(op)
+    }
+    go(l1,l2)(op)
+
+    //converting to LinkedList
+    LinkedList(buf.toList: _*)
+  }
 }
 object LinkedListFeatures {
 
@@ -163,6 +277,8 @@ object LinkedListFeatures {
     //via existing references.
 
     val list = LinkedList(1,2,3,4)
+    val anotherList = LinkedList(5,6,7,8)
+
     val headRemoved = list.tail
 
     println("Set Head & Drop------------------------")
@@ -183,7 +299,6 @@ object LinkedListFeatures {
     println(dropWhileCurried(list)(n => n < 4))
 
     println("Append Lists------------------------")
-    val anotherList = LinkedList(5,6,7,8)
     println(append(list,anotherList))
 
     println("List without last------------------------")
@@ -194,6 +309,87 @@ object LinkedListFeatures {
     println(sumWithFold(list))
     val doubleList = LinkedList(1.0,2.0,3.0,4.0)
     println(productWithFold(doubleList))
+
+//    Below will not work the return is non-local
+//    it will return out of this function, not the anonymous one
+//    val doubleWithZero = LinkedList(1.0,0,3.0)
+//    val prod = LinkedList.foldRight(doubleWithZero,1.0)((x,y) => {
+//      if(x == 0){
+//        return 0
+//      }else{
+//        x * y
+//      }
+//    })
+//    println("product: ")
+//    println(prod)
+//    Exercise 3.7: It is not possible to stop immediately when encountering a zero
+//    before calling the function f in foldRight we go through the whole list.
+
+//    Exercise 3.8
+    println("Call foldRight with the Cons constructor------------------------")
+    //We get back to original list
+    val resultList = LinkedList.foldRight(LinkedList(1,2,3), Nil:LinkedList[Int])(Cons(_,_))
+    println(resultList)
+
+//  This implies we can write LinkedList.apply using a foldRight
+    println(applyUsingFoldRight(1,2,3,4))
+
+    println("foldLeft------------------------")
+    //The + operator is associative and 0 is the neutral element of +
+    //so the foldLeft: (((0+1)+2)+3)+4 = 1+(2+(3+(4+0)))
+    //is equal to the foldRight in this case
+    println(s"Sum with foldRight: ${foldRight(list,0)(_+_)}")
+    println(s"Sum with foldLeft: ${foldLeft(list,0)(_+_)}")
+
+    //exercise 3.11
+    println("exercise 3.11------------------------")
+    println(s"Sum with foldLeft: ${foldLeft(list,0)(_+_)}")
+    println(s"Product with foldLeft: ${foldLeft(doubleList,1.0)(_*_)}")
+    println(s"Count with foldLeft: ${foldLeft(list,0)((x,_) => x+1)}")
+
+
+
+    println("Reverse List--------------------")
+    println(reverse(list))
+
+    println("FoldRight using foldLeft--------------------")
+    println(s"Sum with foldRight: ${foldRight(list,0)(_+_)}")
+    println(s"Sum with foldRightUsingFoldLeft: ${foldRightUsingFoldLeft(list,0)(_+_)}")
+
+    println("Append with foldLeft-----------------")
+    println(appendWithFold(list,anotherList))
+
+    println("Concat-----------------")
+    val listOfLists = LinkedList(list,anotherList,LinkedList(1,1,1))
+    println(concat(listOfLists))
+
+    println("Map------------------------------")
+    val doubledList = mapUsingFold(list)(x => x*2)
+    println(s"map using foldRight: $doubledList")
+    println(s"map using buffer: ${LinkedList.map(list)(_*2)}")
+
+    println("Filter------------------------------")
+    println(s"Numbers > 2: ${LinkedList.filter(list)(_>2)}")
+    println(s"Numbers < 3: ${LinkedList.filter(list)(_<3)}")
+
+    println("FlatMap------------------------------")
+    println(s"Duplicate the list: ${LinkedList.flatMap(list)(n => LinkedList(n,n))}")
+
+    println("Filter with flatMap------------------------------")
+    println(s"Numbers > 2: ${LinkedList.filter(list)(_>2)}")
+    println(s"Numbers < 3: ${LinkedList.filter(list)(_<3)}")
+
+    println("Adding two lists---------------------------------")
+    val l1 = LinkedList(1,2,3)
+    val l2 = LinkedList(1,2,3)
+    val l3 = LinkedList(1,2)
+    println(s"Adding two same sized lists: ${addLists(l1,l2)}")
+    println(s"Adding a smaller and a larger list: ${addLists(l3,l1)}")
+    println(s"Adding a larger and a smaller list: ${addLists(l1,l3)}")
+
+    println("Using zipWith to: ---------------------------------")
+    println(s"- Add two lists: ${zipWith(l1,l2)(_+_)}")
+    println(s"- Multiply two lists ${zipWith(l1,l2)(_*_)}")
   }
 
   def main(args: Array[String]):Unit = {
@@ -222,6 +418,7 @@ object LinkedListFeatures {
 
     val doubleList: LinkedList[Double] = Nil
     println(doubleList)
+
   }
 
 }
